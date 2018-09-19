@@ -1,12 +1,3 @@
-# Define a function f() over a set of numbers.
-# Define a function which minimizes f() over a small set. Is f() minimized over the larger set?
-
-# Is minimizing f() over a small set ever ambiguous?
-# If it is, then the results on the big set will be complicated.
-
-# Minimize variance locally.
-# Maximize variance globally.
-
 import pygame
 import sys
 import node as n
@@ -18,15 +9,16 @@ import copy
 nodes = {}
 
 # ----------- Settings ----------------------------
-grid_size = 10
-spacing = 30
-block_size = 30
-possible_values = [0,1,2]
+grid_size = 15
+spacing = 20
+block_size = 20
+num_possible_values = 5
 
 g_l_angle = 45
 ideal = (math.sin(math.radians(g_l_angle)), math.cos(math.radians(g_l_angle)))
 # -------------------------------------------------
 
+possible_values = range(0,5)
 pygame.init()
 s = pygame.display.set_mode((spacing*grid_size,spacing*grid_size))
 p_clock = pygame.time.Clock()
@@ -34,7 +26,7 @@ p_clock = pygame.time.Clock()
 # Create the connected grid.
 for x in range(grid_size):
     for y in range(grid_size):
-            nodes[str((x,y))] = (n.node(x,y,random.randint(0,1)))
+            nodes[str((x,y))] = (n.node(x,y,random.randint(0,num_possible_values)))
 for x in range(grid_size):
     for y in range(grid_size):
                 for (a,b) in [(0,1),(1,0),(0,-1),(-1,0)]:
@@ -45,6 +37,14 @@ def mean(the_list):
 def variance(the_list):
     m = mean(the_list)
     return sum([(x-m)**2 for x in the_list])
+def entropy(the_list):
+    dict = {}
+    for item in the_list:
+        if str(item) in dict: dict[str(item)] += 1
+        else: dict[str(item)] = 1
+    ps = [x/len(the_list) for x in dict.values()]
+    ps = [x*math.log(x,2) for x in ps]
+    return -sum(ps)
 
 def draw_nodes():
     for v in nodes.values():
@@ -52,7 +52,8 @@ def draw_nodes():
             pygame.draw.line(s, (90,90,90), (v.x*spacing+int(block_size/2), v.y*spacing+int(block_size/2)), \
                                     (n.x*spacing+int(block_size/2), n.y*spacing+int(block_size/2)), 1)
     for v in nodes.values():
-        color = (v.value*50, v.value*50, v.value*50)
+        c = v.value * (255/len(possible_values))
+        color = (c,c,c)
         pygame.draw.rect(s, color, (v.x*spacing, v.y*spacing, block_size, block_size), 0)
 def set_nodes():
     new_values = {}
@@ -60,8 +61,10 @@ def set_nodes():
         global_values = [n.value for n in list(filter(lambda x:x==this_node, nodes.values()))]
         local_values = [n.value for n in this_node.neighbors]
 
-        global_returns = [variance(global_values+[pv]) for pv in possible_values]
-        local_returns = [variance(local_values+[pv]) for pv in possible_values]
+        #global_returns = [variance(global_values+[pv]) for pv in possible_values]
+        #local_returns = [variance(local_values+[pv]) for pv in possible_values]
+        global_returns = [entropy(global_values+[pv]) for pv in possible_values]
+        local_returns = [entropy(local_values+[pv]) for pv in possible_values]
 
         # Define a distance function.
         dist = lambda x,y: sum((x[i]-y[i])**2 for i in range(len(x)))
@@ -101,6 +104,20 @@ while True:
     elif im.down(pygame.K_DOWN):
         g_l_angle = (g_l_angle-1) % 360
 
+    if im.pressed(pygame.K_RIGHT):
+        num_possible_values += 1
+        for n in nodes.values():
+            n.value = random.randint(0,num_possible_values)
+    if im.pressed(pygame.K_LEFT) and num_possible_values > 1:
+        num_possible_values -= 1
+        for n in nodes.values():
+            n.value = random.randint(0,num_possible_values)
+    possible_values = range(num_possible_values)
+
+    if im.pressed(pygame.K_SPACE):
+        for n in nodes.values():
+            n.value = random.randint(0,num_possible_values)
+
     # Normalize the ideal vector.
     ideal = (math.sin(math.radians(g_l_angle)), math.cos(math.radians(g_l_angle)))
     ideal_len = math.sqrt(sum(x ** 2 for x in ideal))
@@ -113,8 +130,6 @@ while True:
 
     win_font = pygame.font.SysFont("Deja Vu", 40)
     s.blit(win_font.render(str(round(math.sin(math.radians(g_l_angle)),2))+", "+str(round(math.cos(math.radians(g_l_angle)),2)), 1, (255, 255, 255)), (0, 0))
-
-    print(g_l_angle)
 
     pygame.display.flip()
     p_clock.tick(30)
