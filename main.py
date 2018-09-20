@@ -9,18 +9,19 @@ import copy
 nodes = {}
 
 # ----------- Settings ----------------------------
-grid_size = 15
+grid_size = 10
 spacing = 20
 block_size = 20
-num_possible_values = 5
+num_possible_values = 8
 
-g_l_angle = 45
-ideal = (math.sin(math.radians(g_l_angle)), math.cos(math.radians(g_l_angle)))
+local_component = 1
+global_component = 1
+ideal = (global_component, local_component)
 # -------------------------------------------------
 
 possible_values = range(0,5)
 pygame.init()
-s = pygame.display.set_mode((spacing*grid_size,spacing*grid_size))
+s = pygame.display.set_mode((spacing*grid_size,spacing*grid_size+80))
 p_clock = pygame.time.Clock()
 
 # Create the connected grid.
@@ -31,6 +32,8 @@ for x in range(grid_size):
     for y in range(grid_size):
                 for (a,b) in [(0,1),(1,0),(0,-1),(-1,0)]:
                     nodes[str((x,y))].neighbors.append( nodes[str(((x+a)%grid_size,(y+b)%grid_size))])
+
+def func(the_list): return entropy(the_list)
 
 def mean(the_list):
     return sum(the_list)/len(the_list)
@@ -47,6 +50,7 @@ def entropy(the_list):
     return -sum(ps)
 
 def draw_nodes():
+
     for v in nodes.values():
         for n in v.neighbors:
             pygame.draw.line(s, (90,90,90), (v.x*spacing+int(block_size/2), v.y*spacing+int(block_size/2)), \
@@ -55,29 +59,24 @@ def draw_nodes():
         c = v.value * (255/len(possible_values))
         color = (c,c,c)
         pygame.draw.rect(s, color, (v.x*spacing, v.y*spacing, block_size, block_size), 0)
+
+
 def set_nodes():
     new_values = {}
     for this_node in nodes.values():
-        global_values = [n.value for n in list(filter(lambda x:x==this_node, nodes.values()))]
+
+        global_values = [n.value for n in list(filter(lambda x:x!=this_node, nodes.values()))]
         local_values = [n.value for n in this_node.neighbors]
 
-        #global_returns = [variance(global_values+[pv]) for pv in possible_values]
-        #local_returns = [variance(local_values+[pv]) for pv in possible_values]
-        global_returns = [entropy(global_values+[pv]) for pv in possible_values]
-        local_returns = [entropy(local_values+[pv]) for pv in possible_values]
+        global_returns = [func(global_values+[pv]) for pv in possible_values]
+        local_returns = [func(local_values+[pv]) for pv in possible_values]
 
         # Define a distance function.
         dist = lambda x,y: sum((x[i]-y[i])**2 for i in range(len(x)))
 
-        # Normalize the acquired vectors.
         possible_points = list(zip(global_returns, local_returns))
-        possible_points = [(0,0) if (a==0 and b==0) else (a/math.sqrt(a**2+b**2), b/math.sqrt(a**2+b**2)) for (a,b) in possible_points]
-
-        # Get the list of distances.
-        dists = [dist(ideal, p) for p in possible_points]
-
-        # This index also the index for the possible value that minimizes the distance between the
-        # actual point (global, local) and the ideal.
+        #dists = [dist((0,0), (p[0]*ideal[0], p[1]*ideal[1])) for p in possible_points]
+        dists = [p[0]*ideal[0]+p[1]*ideal[1] for p in possible_points]
         min_dist_index = dists.index(min(dists))
 
         new_values[str((this_node.x, this_node.y))] = possible_values[min_dist_index]
@@ -100,15 +99,30 @@ while True:
             im.keys_down[str(event.key)] = False
 
     if im.down(pygame.K_UP):
-        g_l_angle = (g_l_angle+1) % 360
+        if global_component < 1:
+            global_component += 0.1
+        else:
+            global_component = 1
     elif im.down(pygame.K_DOWN):
-        g_l_angle = (g_l_angle-1) % 360
+        if global_component > -1:
+            global_component -= 0.1
+        else: global_component = -1
 
-    if im.pressed(pygame.K_RIGHT):
+    if im.down(pygame.K_RIGHT):
+        if local_component < 1:
+            local_component += 0.1
+        else:
+            local_component = 1
+    elif im.down(pygame.K_LEFT):
+        if local_component > -1:
+            local_component -= 0.1
+        else: local_component = -1
+
+    if im.pressed(pygame.K_q):
         num_possible_values += 1
         for n in nodes.values():
             n.value = random.randint(0,num_possible_values)
-    if im.pressed(pygame.K_LEFT) and num_possible_values > 1:
+    if im.pressed(pygame.K_a) and num_possible_values > 1:
         num_possible_values -= 1
         for n in nodes.values():
             n.value = random.randint(0,num_possible_values)
@@ -118,18 +132,21 @@ while True:
         for n in nodes.values():
             n.value = random.randint(0,num_possible_values)
 
-    # Normalize the ideal vector.
-    ideal = (math.sin(math.radians(g_l_angle)), math.cos(math.radians(g_l_angle)))
-    ideal_len = math.sqrt(sum(x ** 2 for x in ideal))
-    ideal = [x / ideal_len for x in ideal]
-
-    pygame.draw.rect(s,(20,20,20),(0,0,500,500))
+    ideal = (global_component, local_component)
+    pygame.draw.rect(s,(20,20,20),(0,0,spacing*grid_size*2,spacing*grid_size+80))
 
     draw_nodes()
     set_nodes()
 
     win_font = pygame.font.SysFont("Deja Vu", 40)
-    s.blit(win_font.render(str(round(math.sin(math.radians(g_l_angle)),2))+", "+str(round(math.cos(math.radians(g_l_angle)),2)), 1, (255, 255, 255)), (0, 0))
+    s.blit(win_font.render("("+str(round(ideal[0],2))+", "+str(round(ideal[1],2))+")", 1, (255, 255, 255)), (10, spacing*grid_size+30))
+    win_font = pygame.font.SysFont("Deja Vu", 15)
+    s.blit(win_font.render("(GLOBAL, LOCAL)", 1, (200,200,200)), (10, spacing*grid_size+60))
+    win_font = pygame.font.SysFont("Deja Vu", 20)
+    s.blit(win_font.render(str(round(func([n.value for n in nodes.values()]),1)), 1, (200,200,200)), (130, spacing*grid_size+30))
+    avg_func = sum([func([v.value for v in n.neighbors]) for n in nodes.values()]) / len(nodes.values())
+    s.blit(win_font.render(str(round(avg_func,1)), 1, (200,200,200)), (130, spacing*grid_size+50))
+
 
     pygame.display.flip()
     p_clock.tick(30)
